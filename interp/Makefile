@@ -1,6 +1,6 @@
 
 CXX=g++
-CFLAGS=-O2 -Wall
+CFLAGS=-O2 -Wall -ggdb
 LDFLAGS=-ldl -fPIC
 PROJ=malloc_wrapper
 
