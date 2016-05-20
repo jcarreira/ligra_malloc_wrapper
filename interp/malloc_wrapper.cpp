@@ -7,6 +7,7 @@
 #include <time.h>
 #include <errno.h>
 #include <string.h>
+#include <vector>
 
 #define GB (1024*1024*1024L)
 #define MAX_MEMORY 3*GB
@@ -19,7 +20,10 @@ int inside_malloc = 0;
 int inside_free = 0;
 int inside_calloc = 0;
 
-std::map<void*, int> addr_to_size;
+//std::map<void*, int> addr_to_size;
+std::vector<std::pair<void*, unsigned long long int> > addr_to_size;
+
+
 unsigned long int total_allocated = 0;
 unsigned long int max_allocated = 0;
 unsigned long int total_elapsed_malloc = 0;
@@ -67,26 +71,57 @@ void setup_handler()
 
 static void mtrace_init(void)
 {
-    setup_handler();
-
     real_malloc = (malloc_type)1;
     real_free = (free_type)1;
-    real_malloc = (malloc_type)dlsym(RTLD_NEXT, "malloc");
-    if (NULL == real_malloc) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-    }
 
-    real_free = (free_type)dlsym(RTLD_NEXT, "free");
-    if (NULL == real_free) {
-        fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
-    }
+    addr_to_size.reserve(100000);
+    setup_handler();
+
+    //real_malloc = (malloc_type)dlsym(RTLD_NEXT, "malloc");
+    //if (NULL == real_malloc) {
+    //    fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
+    //}
+
+    //real_free = (free_type)dlsym(RTLD_NEXT, "free");
+    //if (NULL == real_free) {
+    //    fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
+    //}
 
     //big_mem = new char[BIG_MEM_SIZE];
     //big_mem[0] = 0;
 }
 
-#define BASE_ADDRESS  0x800000000L
-void* cur_addr = (void*)BASE_ADDRESS;
+//#define BASE_ADDRESS  0x800000000L
+//void* cur_addr = (void*)BASE_ADDRESS;
+        
+void insert_addr_to_size(void *p, unsigned long int size_allocation) {
+    //addr_to_size[p] = size_allocation;
+    addr_to_size.push_back(std::make_pair(p, size_allocation));
+    //addr_to_size[addr_to_size.size()] = std::make_pair(p, size_allocation);
+}
+
+void erase(void *p) {
+    for (unsigned int i = 0; i < addr_to_size.size(); ++i) {
+        if (addr_to_size[i].first == p)
+            addr_to_size.erase(addr_to_size.begin() + i);
+    }
+}
+
+bool exists(void *p) {
+    for (unsigned int i = 0; i < addr_to_size.size(); ++i) {
+        if (addr_to_size[i].first == p)
+            return true;
+    }
+    return false;
+}
+
+unsigned long long int get_size(void *p) {
+    for (unsigned int i = 0; i < addr_to_size.size(); ++i) {
+        if (addr_to_size[i].first == p)
+            return addr_to_size[i].second;
+    }
+    exit(-1);
+}
 
 void *malloc(size_t size)
 {
@@ -98,20 +133,22 @@ void *malloc(size_t size)
     }
 
     void *p = NULL;
-    fprintf(stderr, "malloc(%lu)\n", size);
+    fprintf(stderr, "malloc(%lu). count: %lu\n", size, addr_to_size.size());
     //p = real_malloc(size);
 
-    unsigned long size_allocation = size/PAGE_SIZE*PAGE_SIZE+PAGE_SIZE;
+    unsigned long long size_allocation = size/PAGE_SIZE*PAGE_SIZE+PAGE_SIZE;
 
-    p = mmap((void*)cur_addr, size_allocation,
+    p = mmap(NULL, size_allocation,
+    //p = mmap((void*)cur_addr, size_allocation,
                 PROT_EXEC|PROT_READ|PROT_WRITE, 
-            MAP_FIXED | MAP_PRIVATE|MAP_ANONYMOUS, 0, 0); 
-    cur_addr += size_allocation;
+            MAP_PRIVATE|MAP_ANONYMOUS, 0, 0); 
+            //MAP_FIXED | MAP_PRIVATE|MAP_ANONYMOUS, 0, 0); 
+    //cur_addr += size_allocation;
     if (p == MAP_FAILED) {
         fprintf(stderr, "Error mmap. errno: %d\n", errno);
         exit(-1);
     }  
-    fprintf(stderr, "malloc(%lu) = 0x%p\n", size, p);
+    fprintf(stderr, "malloc(%lu) = %p\n", size, p);
 
 
     //if (count_malloc >= 100 && count_malloc <= 500) {
@@ -121,8 +158,9 @@ void *malloc(size_t size)
     //}
 
     if (inside_free == 0 && inside_malloc == 1) {
-        fprintf(stderr, "addr_to_size[%p] = %d;\n", p, size_allocation);
-        addr_to_size[p] = size_allocation;
+        //fprintf(stderr, "addr_to_size[%p] = %d;\n", p, size_allocation);
+
+        insert_addr_to_size(p, size_allocation);
         total_allocated += size_allocation;
         max_allocated = MAX(max_allocated, total_allocated);
     } else {
@@ -223,23 +261,27 @@ void free(void* addr)
     //    fprintf(stderr, "free(0x%lu)\n", (unsigned long int)addr);
     //real_free(addr);
 
-    if (addr_to_size.find(addr) == addr_to_size.end()) {
+    if (!exists(addr)) {
+    //if (addr_to_size.find(addr) == addr_to_size.end()) {
         fprintf(stderr, "free: addr %p not found\n", addr);
         inside_free--;
         return;
         //exit(-1);
     }
 
-    int ret = munmap(addr, addr_to_size[addr]);
-    fprintf(stderr, "munmap(%p, %d)\n", addr, addr_to_size[addr]);
+    int ret = munmap(addr, get_size(addr));
+    //int ret = munmap(addr, addr_to_size[addr]);
+    //fprintf(stderr, "munmap(%p, %d)\n", addr, addr_to_size[addr]);
     if (ret != 0) {
         fprintf(stderr, "Error munmap\n");
         exit(-1);
     }
     
-    if (inside_malloc == 0 && inside_free == 1 && addr_to_size.find(addr) != addr_to_size.end()) {
-        total_allocated -= addr_to_size[addr];
-        addr_to_size.erase(addr);
+    if (inside_malloc == 0 && inside_free == 1 && exists(addr)) {
+    //if (inside_malloc == 0 && inside_free == 1 && addr_to_size.find(addr) != addr_to_size.end()) {
+        total_allocated -= get_size(addr);//addr_to_size[addr];
+        erase(addr);
+        //addr_to_size.erase(addr);
     }
 
     inside_free--;
