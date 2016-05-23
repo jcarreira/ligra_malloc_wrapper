@@ -47,11 +47,11 @@ unsigned long long int get_time()
 
 static void handler(int sig, siginfo_t *si, void *unused)
 {
-    printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
+   // printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
     //addr = mmap((void*)0x8000000, 1024*4, PROT_EXEC|PROT_READ|PROT_WRITE, MAP_FIXED | MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
     int ret = mprotect(si->si_addr, PAGE_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC);
     if (ret != 0) {
-        printf("mprotect failed\n");
+       // printf("mprotect failed\n");
         exit(-1);
     }
 }
@@ -68,23 +68,29 @@ void setup_handler()
     }
 }
 
+void at_exit()
+{
+
+}
 
 static void mtrace_init(void)
 {
     real_malloc = (malloc_type)1;
     real_free = (free_type)1;
 
-    addr_to_size.reserve(100000);
+    atexit(at_exit);
+
+    addr_to_size.reserve(10000);
     setup_handler();
 
     //real_malloc = (malloc_type)dlsym(RTLD_NEXT, "malloc");
     //if (NULL == real_malloc) {
-    //    fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
+    //   // fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
     //}
 
     //real_free = (free_type)dlsym(RTLD_NEXT, "free");
     //if (NULL == real_free) {
-    //    fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
+    //   // fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
     //}
 
     //big_mem = new char[BIG_MEM_SIZE];
@@ -133,7 +139,7 @@ void *malloc(size_t size)
     }
 
     void *p = NULL;
-    fprintf(stderr, "malloc(%lu). count: %lu\n", size, addr_to_size.size());
+   // fprintf(stderr, "malloc(%lu). count: %lu\n", size, addr_to_size.size());
     //p = real_malloc(size);
 
     unsigned long long size_allocation = size/PAGE_SIZE*PAGE_SIZE+PAGE_SIZE;
@@ -145,16 +151,16 @@ void *malloc(size_t size)
             //MAP_FIXED | MAP_PRIVATE|MAP_ANONYMOUS, 0, 0); 
     //cur_addr += size_allocation;
     if (p == MAP_FAILED) {
-        fprintf(stderr, "Error mmap. errno: %d\n", errno);
+       // fprintf(stderr, "Error mmap. errno: %d\n", errno);
         exit(-1);
     }  
-    fprintf(stderr, "malloc(%lu) = %p\n", size, p);
+   // fprintf(stderr, "malloc(%lu) = %p\n", size, p);
 
 
     //if (count_malloc >= 100 && count_malloc <= 500) {
     //    int ret = mprotect(p, MAX((size/PAGE_SIZE) * PAGE_SIZE, PAGE_SIZE), PROT_NONE);
-    //    printf("int ret = mprotect(0x%X, %d, PROT_NONE)\n", p, MAX( (size/PAGE_SIZE) * PAGE_SIZE, PAGE_SIZE));
-    //    printf("mprotect: %d errno: %d aligned: %d\n", ret, errno, (((unsigned long)p) & (PAGE_SIZE-1)) == 0);
+    //   // printf("int ret = mprotect(0x%X, %d, PROT_NONE)\n", p, MAX( (size/PAGE_SIZE) * PAGE_SIZE, PAGE_SIZE));
+    //   // printf("mprotect: %d errno: %d aligned: %d\n", ret, errno, (((unsigned long)p) & (PAGE_SIZE-1)) == 0);
     //}
 
     if (inside_free == 0 && inside_malloc == 1) {
@@ -164,7 +170,7 @@ void *malloc(size_t size)
         total_allocated += size_allocation;
         max_allocated = MAX(max_allocated, total_allocated);
     } else {
-        fprintf(stderr, "not added inside_malloc: %d inside_free: %d\n", inside_malloc, inside_free);
+       // fprintf(stderr, "not added inside_malloc: %d inside_free: %d\n", inside_malloc, inside_free);
     }
 
     unsigned long long elapsed = get_time() - start;
@@ -198,10 +204,10 @@ void *calloc(size_t nmemb, size_t size){
         mtrace_init();
     }
 
-    fprintf(stderr, "calloc\n");
+   // fprintf(stderr, "calloc\n");
     void* p = malloc(nmemb*size);
     if (p == 0) {
-        fprintf(stderr, "error calloc\n");
+       // fprintf(stderr, "error calloc\n");
         exit(-1);
     }
     memset(p, 0, nmemb*size);
@@ -211,25 +217,25 @@ void *calloc(size_t nmemb, size_t size){
 }
 
 void *realloc(void *ptr, size_t size){
-    fprintf(stderr, "realloc\n");
+   // fprintf(stderr, "realloc\n");
 
     //if (addr_to_size.find(ptr) == addr_to_size.end()) {
 
     //    if (NULL == real_malloc) {
     //        real_realloc = (realloc_type)dlsym(RTLD_NEXT, "realloc");
     //        if (NULL == real_malloc) {
-    //            fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
+    //           // fprintf(stderr, "Error in `dlsym`: %s\n", dlerror());
     //            exit(-1);
     //        }
     //    }
 
-    //    fprintf(stderr, "realloc: addr not found\n");
+    //   // fprintf(stderr, "realloc: addr not found\n");
     //    return real_realloc(ptr, size);
     //    //exit(-1);
     //}
 
     if (ptr == NULL && size == 0) {
-        fprintf(stderr, "error realloc\n");
+       // fprintf(stderr, "error realloc\n");
         exit(-1);
     }
     else if (ptr == NULL) {
@@ -247,7 +253,7 @@ void *realloc(void *ptr, size_t size){
 
 void free(void* addr)
 {
-    fprintf(stderr, "munmap(%p)\n", addr);
+   // fprintf(stderr, "munmap(%p)\n", addr);
 
     if (addr == NULL)
         return;
@@ -258,12 +264,12 @@ void free(void* addr)
         mtrace_init();
     }
 
-    //    fprintf(stderr, "free(0x%lu)\n", (unsigned long int)addr);
+    //   // fprintf(stderr, "free(0x%lu)\n", (unsigned long int)addr);
     //real_free(addr);
 
     if (!exists(addr)) {
     //if (addr_to_size.find(addr) == addr_to_size.end()) {
-        fprintf(stderr, "free: addr %p not found\n", addr);
+       // fprintf(stderr, "free: addr %p not found\n", addr);
         inside_free--;
         return;
         //exit(-1);
@@ -273,7 +279,7 @@ void free(void* addr)
     //int ret = munmap(addr, addr_to_size[addr]);
     //fprintf(stderr, "munmap(%p, %d)\n", addr, addr_to_size[addr]);
     if (ret != 0) {
-        fprintf(stderr, "Error munmap\n");
+       // fprintf(stderr, "Error munmap\n");
         exit(-1);
     }
     
@@ -285,7 +291,7 @@ void free(void* addr)
     }
 
     inside_free--;
-    fprintf(stderr, "munmap exit\n");
+   // fprintf(stderr, "munmap exit\n");
 }
 
 

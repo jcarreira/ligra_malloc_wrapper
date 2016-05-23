@@ -1,0 +1,7 @@
+In file included from BFS.C:24:0:
+ligra.h:53:17: error: declaration of ‘operator new’ as non-function
+ #define new new (__FILE__, __LINE__, __FUNCTION__)
+                 ^
+ligra.h:55:16: note: in expansion of macro ‘new’
+ void *operator new (size_t size, char *file, int line, char *function)
+                ^
